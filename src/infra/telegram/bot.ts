@@ -14,11 +14,12 @@ export function createTelegramBot(dependencies: Dependencies): Telegraf {
   const bot = new Telegraf(env.TELEGRAM_BOT_TOKEN);
 
   bot.use(async (ctx, next) => {
-    if (ctx.chat && ctx.chat.type !== "private") {
+    if (isGroupUpdate(ctx)) {
       if (ctx.callbackQuery) {
         await ctx.answerCbQuery("Me chama no privado para continuar.");
       }
 
+      await deleteCallbackMessage(ctx);
       return;
     }
 
@@ -234,7 +235,41 @@ function isCommandMessage(ctx: Context): boolean {
 }
 
 function isPrivateChat(ctx: Context): boolean {
-  return ctx.chat?.type === "private";
+  return getChatType(ctx) === "private";
+}
+
+function isGroupUpdate(ctx: Context): boolean {
+  const chatType = getChatType(ctx);
+
+  return chatType === "group" || chatType === "supergroup" || chatType === "channel";
+}
+
+function getChatType(ctx: Context): string | undefined {
+  if (ctx.chat?.type) {
+    return ctx.chat.type;
+  }
+
+  const callbackQuery = ctx.callbackQuery;
+
+  if (callbackQuery && "message" in callbackQuery && callbackQuery.message?.chat.type) {
+    return callbackQuery.message.chat.type;
+  }
+
+  return undefined;
+}
+
+async function deleteCallbackMessage(ctx: Context): Promise<void> {
+  const callbackQuery = ctx.callbackQuery;
+
+  if (!callbackQuery || !("message" in callbackQuery) || !callbackQuery.message) {
+    return;
+  }
+
+  try {
+    await ctx.telegram.deleteMessage(callbackQuery.message.chat.id, callbackQuery.message.message_id);
+  } catch {
+    // The message may be too old or already deleted.
+  }
 }
 
 async function ensurePrivateChat(ctx: Context): Promise<boolean> {
