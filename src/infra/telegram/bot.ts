@@ -19,10 +19,18 @@ export function createTelegramBot(dependencies: Dependencies): Telegraf {
   });
 
   bot.start(async (ctx) => {
+    if (!(await ensurePrivateChat(ctx))) {
+      return;
+    }
+
     await sendEntryMessage(ctx, dependencies);
   });
 
   bot.command("help", async (ctx) => {
+    if (!(await ensurePrivateChat(ctx))) {
+      return;
+    }
+
     await replyReplacingPrevious(ctx, getHelpMessage(), {
       parse_mode: "HTML",
       ...getMainMenu()
@@ -30,24 +38,44 @@ export function createTelegramBot(dependencies: Dependencies): Telegraf {
   });
 
   bot.command("comprar", async (ctx) => {
+    if (!(await ensurePrivateChat(ctx))) {
+      return;
+    }
+
     await sendCheckout(ctx, dependencies);
   });
 
   bot.command("assinatura", async (ctx) => {
+    if (!(await ensurePrivateChat(ctx))) {
+      return;
+    }
+
     await sendSubscriptionStatus(ctx, dependencies);
   });
 
   bot.action("buy", async (ctx) => {
+    if (!(await ensurePrivateChat(ctx))) {
+      return;
+    }
+
     await ctx.answerCbQuery("Gerando pagamento...");
     await sendCheckout(ctx, dependencies);
   });
 
   bot.action("subscription", async (ctx) => {
+    if (!(await ensurePrivateChat(ctx))) {
+      return;
+    }
+
     await ctx.answerCbQuery("Consultando assinatura...");
     await sendSubscriptionStatus(ctx, dependencies);
   });
 
   bot.action("help", async (ctx) => {
+    if (!(await ensurePrivateChat(ctx))) {
+      return;
+    }
+
     await ctx.answerCbQuery();
 
     await replyReplacingPrevious(ctx, getHelpMessage(), {
@@ -57,6 +85,10 @@ export function createTelegramBot(dependencies: Dependencies): Telegraf {
   });
 
   bot.action("start_chat", async (ctx) => {
+    if (!(await ensurePrivateChat(ctx))) {
+      return;
+    }
+
     await ctx.answerCbQuery();
 
     await replyReplacingPrevious(ctx, getHelpMessage(), {
@@ -66,6 +98,10 @@ export function createTelegramBot(dependencies: Dependencies): Telegraf {
   });
 
   bot.on("message", async (ctx) => {
+    if (!isPrivateChat(ctx)) {
+      return;
+    }
+
     if (isCommandMessage(ctx)) {
       return;
     }
@@ -187,6 +223,24 @@ function isCommandMessage(ctx: Context): boolean {
   const message = ctx.message;
 
   return !!message && "text" in message && typeof message.text === "string" && message.text.startsWith("/");
+}
+
+function isPrivateChat(ctx: Context): boolean {
+  return ctx.chat?.type === "private";
+}
+
+async function ensurePrivateChat(ctx: Context): Promise<boolean> {
+  if (isPrivateChat(ctx)) {
+    return true;
+  }
+
+  if (ctx.callbackQuery) {
+    await ctx.answerCbQuery("Me chama no privado para continuar.");
+    return false;
+  }
+
+  await ctx.reply("Me chama no privado para comprar ou consultar sua assinatura.");
+  return false;
 }
 
 function getMainMenu(): ReturnType<typeof Markup.inlineKeyboard> {
