@@ -4,6 +4,7 @@ import { z } from "zod";
 const envSchema = z.object({
   TELEGRAM_BOT_TOKEN: z.string().min(1, "TELEGRAM_BOT_TOKEN e obrigatorio"),
   TELEGRAM_GROUP_ID: z.coerce.number().int(),
+  DATABASE_URL: z.string().url("DATABASE_URL deve ser uma URL valida do Postgres"),
   APP_BASE_URL: z.string().url().default("http://localhost:3000"),
   PORT: z.coerce.number().int().positive().default(3000),
   PAYMENT_AMOUNT_CENTS: z.coerce.number().int().positive().default(1990),
@@ -23,6 +24,7 @@ const envSchema = z.object({
 export const env = envSchema.parse({
   TELEGRAM_BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN,
   TELEGRAM_GROUP_ID: process.env.TELEGRAM_GROUP_ID,
+  DATABASE_URL: process.env.DATABASE_URL,
   APP_BASE_URL: process.env.APP_BASE_URL || undefined,
   PORT: process.env.PORT || undefined,
   PAYMENT_AMOUNT_CENTS: process.env.PAYMENT_AMOUNT_CENTS || undefined,
