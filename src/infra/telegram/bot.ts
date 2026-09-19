@@ -15,6 +15,12 @@ export function createTelegramBot(dependencies: Dependencies): Telegraf {
 
   bot.use(async (ctx, next) => {
     if (isGroupUpdate(ctx)) {
+      console.log("Update de grupo ignorado.", {
+        chatId: getChatId(ctx),
+        chatType: getChatType(ctx),
+        updateType: ctx.updateType
+      });
+
       if (ctx.callbackQuery) {
         await ctx.answerCbQuery("Me chama no privado para continuar.");
       }
@@ -126,6 +132,10 @@ export function createTelegramBot(dependencies: Dependencies): Telegraf {
 }
 
 async function sendEntryMessage(ctx: Context, dependencies: Dependencies): Promise<void> {
+  if (!isPrivateChat(ctx)) {
+    return;
+  }
+
   if (!ctx.from) {
     await replyReplacingPrevious(ctx, getHelpMessage(), {
       parse_mode: "HTML",
@@ -151,6 +161,10 @@ async function sendEntryMessage(ctx: Context, dependencies: Dependencies): Promi
 }
 
 async function sendCheckout(ctx: Context, dependencies: Dependencies): Promise<void> {
+  if (!isPrivateChat(ctx)) {
+    return;
+  }
+
   if (!ctx.from || !ctx.chat) {
     await replyReplacingPrevious(ctx, "Nao consegui identificar esta conversa. Tente novamente pelo chat do bot.");
     return;
@@ -189,6 +203,10 @@ async function sendCheckout(ctx: Context, dependencies: Dependencies): Promise<v
 }
 
 async function sendSubscriptionStatus(ctx: Context, dependencies: Dependencies): Promise<void> {
+  if (!isPrivateChat(ctx)) {
+    return;
+  }
+
   if (!ctx.from) {
     await replyReplacingPrevious(ctx, "Nao consegui identificar seu usuario. Tente novamente pelo chat do bot.");
     return;
@@ -253,6 +271,20 @@ function getChatType(ctx: Context): string | undefined {
 
   if (callbackQuery && "message" in callbackQuery && callbackQuery.message?.chat.type) {
     return callbackQuery.message.chat.type;
+  }
+
+  return undefined;
+}
+
+function getChatId(ctx: Context): number | undefined {
+  if (ctx.chat?.id) {
+    return ctx.chat.id;
+  }
+
+  const callbackQuery = ctx.callbackQuery;
+
+  if (callbackQuery && "message" in callbackQuery && callbackQuery.message?.chat.id) {
+    return callbackQuery.message.chat.id;
   }
 
   return undefined;
