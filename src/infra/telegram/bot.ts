@@ -14,6 +14,14 @@ export function createTelegramBot(dependencies: Dependencies): Telegraf {
   const bot = new Telegraf(env.TELEGRAM_BOT_TOKEN);
 
   bot.use(async (ctx, next) => {
+    if (ctx.chat && ctx.chat.type !== "private") {
+      if (ctx.callbackQuery) {
+        await ctx.answerCbQuery("Me chama no privado para continuar.");
+      }
+
+      return;
+    }
+
     await trackIncomingMessage(ctx);
     await next();
   });
@@ -236,10 +244,8 @@ async function ensurePrivateChat(ctx: Context): Promise<boolean> {
 
   if (ctx.callbackQuery) {
     await ctx.answerCbQuery("Me chama no privado para continuar.");
-    return false;
   }
 
-  await ctx.reply("Me chama no privado para comprar ou consultar sua assinatura.");
   return false;
 }
 
