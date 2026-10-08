@@ -1,5 +1,7 @@
 import { Markup, Telegraf } from "telegraf";
 import { env } from "../../shared/config/env.js";
+import type { ListGames } from "../../modules/games/application/list-games.js";
+import type { Game } from "../../modules/games/domain/game.js";
 import type { CreatePayment } from "../../modules/payments/application/create-payment.js";
 import type { GetSubscriptionStatus } from "../../modules/subscriptions/application/get-subscription-status.js";
 import { replyReplacingPrevious, trackIncomingMessage } from "./chat-message-cleanup.js";
@@ -8,6 +10,7 @@ import type { Context } from "telegraf";
 type Dependencies = {
   createPayment: CreatePayment;
   getSubscriptionStatus: GetSubscriptionStatus;
+  listGames: ListGames;
 };
 
 export function createTelegramBot(dependencies: Dependencies): Telegraf {
@@ -57,7 +60,15 @@ export function createTelegramBot(dependencies: Dependencies): Telegraf {
       return;
     }
 
-    await sendCheckout(ctx, dependencies);
+    await sendPurchaseOptions(ctx);
+  });
+
+  bot.command("jogos", async (ctx) => {
+    if (!(await ensurePrivateChat(ctx))) {
+      return;
+    }
+
+    await sendGames(ctx, dependencies);
   });
 
   bot.command("assinatura", async (ctx) => {
@@ -73,8 +84,37 @@ export function createTelegramBot(dependencies: Dependencies): Telegraf {
       return;
     }
 
+    await ctx.answerCbQuery();
+    await sendPurchaseOptions(ctx);
+  });
+
+  bot.action("games", async (ctx) => {
+    if (!(await ensurePrivateChat(ctx))) {
+      return;
+    }
+
+    await ctx.answerCbQuery("Buscando jogos...");
+    await sendGames(ctx, dependencies);
+  });
+
+  bot.action("vip", async (ctx) => {
+    if (!(await ensurePrivateChat(ctx))) {
+      return;
+    }
+
+    await ctx.answerCbQuery("Gerando pagamento VIP...");
+    await sendCheckout(ctx, dependencies, { productType: "vip" });
+  });
+
+  bot.action(/^game:(.+)$/, async (ctx) => {
+    if (!(await ensurePrivateChat(ctx))) {
+      return;
+    }
+
+    const gameId = ctx.match[1];
+
     await ctx.answerCbQuery("Gerando pagamento...");
-    await sendCheckout(ctx, dependencies);
+    await sendCheckout(ctx, dependencies, { productType: "game", gameId });
   });
 
   bot.action("subscription", async (ctx) => {
@@ -160,7 +200,55 @@ async function sendEntryMessage(ctx: Context, dependencies: Dependencies): Promi
   });
 }
 
-async function sendCheckout(ctx: Context, dependencies: Dependencies): Promise<void> {
+async function sendGames(ctx: Context, dependencies: Dependencies): Promise<void> {
+  if (!isPrivateChat(ctx)) {
+    return;
+  }
+
+  const games = await dependencies.listGames.active();
+
+  if (games.length === 0) {
+    await replyReplacingPrevious(ctx, "Nenhum jogo disponivel no momento.", {
+      ...Markup.inlineKeyboard([
+        [Markup.button.callback("Inicio", "start_chat")],
+        [Markup.button.callback("Ver jogos", "games")],
+        [Markup.button.callback("Assinar VIP", "vip")],
+        [Markup.button.callback("Ver assinatura VIP", "subscription")],
+        [Markup.button.callback("Ajuda", "help")]
+      ])
+    });
+    return;
+  }
+
+  await replyReplacingPrevious(ctx, getGamesMessage(games), {
+    parse_mode: "HTML",
+    ...Markup.inlineKeyboard([
+      ...games.map((game) => [Markup.button.callback(game.title, `game:${game.id}`)]),
+      [Markup.button.callback("Assinar VIP", "vip")],
+      [Markup.button.callback("Inicio", "start_chat")],
+      [Markup.button.callback("Ver assinatura VIP", "subscription"), Markup.button.callback("Ajuda", "help")]
+    ])
+  });
+}
+
+async function sendPurchaseOptions(ctx: Context): Promise<void> {
+  await replyReplacingPrevious(ctx, "<b>O que voce quer comprar?</b>", {
+    parse_mode: "HTML",
+    ...Markup.inlineKeyboard([
+      [Markup.button.callback("Ver jogos", "games")],
+      [Markup.button.callback("Assinar VIP", "vip")],
+      [Markup.button.callback("Inicio", "start_chat")],
+      [Markup.button.callback("Ver assinatura VIP", "subscription"), Markup.button.callback("Ajuda", "help")]
+    ])
+  });
+}
+
+type CheckoutOptions = {
+  productType: "vip" | "game";
+  gameId?: string;
+};
+
+async function sendCheckout(ctx: Context, dependencies: Dependencies, options: CheckoutOptions): Promise<void> {
   if (!isPrivateChat(ctx)) {
     return;
   }
@@ -170,10 +258,29 @@ async function sendCheckout(ctx: Context, dependencies: Dependencies): Promise<v
     return;
   }
 
+  const game = options.gameId
+    ? (await dependencies.listGames.active()).find((activeGame) => activeGame.id === options.gameId)
+    : undefined;
+
+  if (options.gameId && !game) {
+    await replyReplacingPrevious(ctx, "Este jogo nao esta mais disponivel.", {
+      ...Markup.inlineKeyboard([
+        [Markup.button.callback("Ver jogos", "games")],
+        [Markup.button.callback("Inicio", "start_chat")]
+      ])
+    });
+    return;
+  }
+
+  const amountCents = game?.amountCents ?? env.PAYMENT_AMOUNT_CENTS;
   const checkout = await dependencies.createPayment.execute({
     telegramUserId: ctx.from.id,
     telegramChatId: ctx.chat.id,
-    amountCents: env.PAYMENT_AMOUNT_CENTS
+    amountCents,
+    productType: options.productType,
+    gameId: game?.id,
+    gameTitle: game?.title,
+    gameTelegramGroupId: game?.telegramGroupId || undefined
   });
   const canUseUrlButton = isPublicHttpUrl(checkout.checkoutUrl);
   const paymentInstructions = checkout.qrCode
@@ -189,11 +296,16 @@ async function sendCheckout(ctx: Context, dependencies: Dependencies): Promise<v
     [
       "<b>Pagamento gerado com sucesso.</b>",
       "",
-      `Valor: <b>R$ ${(env.PAYMENT_AMOUNT_CENTS / 100).toFixed(2)}</b>`,
+      ...(game
+        ? [`Jogo avulso: <b>${escapeHtml(game.title)}</b>`, ""]
+        : ["Plano: <b>VIP mensal</b>", ""]),
+      `Valor: <b>${formatMoney(amountCents)}</b>`,
       "",
       ...paymentInstructions,
       "",
-      "Depois da confirmacao, eu libero seu acesso ao grupo automaticamente."
+      options.productType === "vip"
+        ? "Depois da confirmacao, eu libero seu acesso VIP por 30 dias automaticamente."
+        : "Depois da confirmacao, eu envio o link de acesso para assistir este jogo."
     ].join("\n"),
     {
       parse_mode: "HTML",
@@ -217,7 +329,9 @@ async function sendSubscriptionStatus(ctx: Context, dependencies: Dependencies):
   if (!status.subscription) {
     await replyReplacingPrevious(ctx, "Voce ainda nao tem uma assinatura ativa.", {
       ...Markup.inlineKeyboard([
-        [Markup.button.callback("Assinar agora", "buy")],
+        [Markup.button.callback("Assinar VIP", "vip")],
+        [Markup.button.callback("Ver jogos", "games")],
+        [Markup.button.callback("Inicio", "start_chat")],
         [Markup.button.callback("Ajuda", "help")]
       ])
     });
@@ -232,7 +346,9 @@ async function sendSubscriptionStatus(ctx: Context, dependencies: Dependencies):
   await replyReplacingPrevious(ctx, message, {
     parse_mode: "HTML",
     ...Markup.inlineKeyboard([
-      [Markup.button.callback(status.isActive ? "Renovar assinatura" : "Renovar agora", "buy")],
+      [Markup.button.callback(status.isActive ? "Renovar VIP" : "Assinar VIP", "vip")],
+      [Markup.button.callback("Ver jogos", "games")],
+      [Markup.button.callback("Inicio", "start_chat")],
       [Markup.button.callback("Ajuda", "help")]
     ])
   });
@@ -244,6 +360,20 @@ function getHelpMessage(): string {
     "",
     "Escolha uma opcao abaixo:"
   ].join("\n");
+}
+
+function getGamesMessage(games: Game[]): string {
+  return [
+    "<b>Jogos disponiveis</b>",
+    "",
+    ...games.map((game) => {
+      const startsAt = game.startsAt ? ` - ${formatDate(game.startsAt)}` : "";
+
+      return `${escapeHtml(game.title)}${startsAt}\nValor: <b>${formatMoney(game.amountCents)}</b>`;
+    }),
+    "",
+    "Escolha o jogo para gerar o pagamento."
+  ].join("\n\n");
 }
 
 function isCommandMessage(ctx: Context): boolean {
@@ -318,15 +448,18 @@ async function ensurePrivateChat(ctx: Context): Promise<boolean> {
 
 function getMainMenu(): ReturnType<typeof Markup.inlineKeyboard> {
   return Markup.inlineKeyboard([
-    [Markup.button.callback("Assinar agora", "buy")],
-    [Markup.button.callback("Ver assinatura", "subscription"), Markup.button.callback("Ajuda", "help")]
+    [Markup.button.callback("Ver jogos", "games")],
+    [Markup.button.callback("Assinar VIP", "vip")],
+    [Markup.button.callback("Inicio", "start_chat")],
+    [Markup.button.callback("Ver assinatura VIP", "subscription"), Markup.button.callback("Ajuda", "help")]
   ]);
 }
 
 function getCheckoutMenu(checkout: { checkoutUrl: string; qrCode?: string }): Parameters<Context["reply"]>[1] {
   const navigationButtons = [
-    { text: "Ver assinatura", callback_data: "subscription" },
-    { text: "Ajuda", callback_data: "help" }
+    { text: "Inicio", callback_data: "start_chat" },
+    { text: "Ver jogos", callback_data: "games" },
+    { text: "VIP", callback_data: "vip" },
   ];
 
   if (checkout.qrCode) {
@@ -381,4 +514,11 @@ function formatDate(date: Date): string {
     timeStyle: "short",
     timeZone: "America/Sao_Paulo"
   }).format(date);
+}
+
+function formatMoney(amountCents: number): string {
+  return new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL"
+  }).format(amountCents / 100);
 }

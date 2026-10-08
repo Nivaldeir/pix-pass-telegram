@@ -17,6 +17,12 @@ const envSchema = z.object({
   MONKEYPAY_PAYER_NAME: z.string().optional(),
   MONKEYPAY_PAYER_EMAIL: z.string().optional(),
   MONKEYPAY_WEBHOOK_SECRET: z.string().optional(),
+  TELEGRAM_API_ID: z.coerce.number().int().positive().optional(),
+  TELEGRAM_API_HASH: z.string().optional(),
+  TELEGRAM_USER_SESSION: z.string().optional(),
+  GAME_GROUP_TTL_HOURS: z.coerce.number().positive().default(6),
+  ADMIN_USER: z.string().default("admin"),
+  ADMIN_PASSWORD: z.string().optional(),
   REDIS_URL: z.string().url().default("redis://localhost:6379"),
   RENEWAL_REMINDER_DAYS_BEFORE: z.coerce.number().int().positive().default(3)
 });
@@ -37,6 +43,12 @@ export const env = envSchema.parse({
   MONKEYPAY_PAYER_NAME: process.env.MONKEYPAY_PAYER_NAME || undefined,
   MONKEYPAY_PAYER_EMAIL: process.env.MONKEYPAY_PAYER_EMAIL || undefined,
   MONKEYPAY_WEBHOOK_SECRET: process.env.MONKEYPAY_WEBHOOK_SECRET || undefined,
+  TELEGRAM_API_ID: process.env.TELEGRAM_API_ID || undefined,
+  TELEGRAM_API_HASH: process.env.TELEGRAM_API_HASH || undefined,
+  TELEGRAM_USER_SESSION: process.env.TELEGRAM_USER_SESSION || undefined,
+  GAME_GROUP_TTL_HOURS: process.env.GAME_GROUP_TTL_HOURS || undefined,
+  ADMIN_USER: process.env.ADMIN_USER || undefined,
+  ADMIN_PASSWORD: process.env.ADMIN_PASSWORD || undefined,
   REDIS_URL: process.env.REDIS_URL || undefined,
   RENEWAL_REMINDER_DAYS_BEFORE: process.env.RENEWAL_REMINDER_DAYS_BEFORE || undefined
 });

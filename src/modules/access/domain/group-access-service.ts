@@ -3,6 +3,6 @@ export type GrantAccessResult = {
 };
 
 export interface GroupAccessService {
-  grantAccess(telegramUserId: number): Promise<GrantAccessResult>;
+  grantAccess(telegramUserId: number, telegramGroupId?: number): Promise<GrantAccessResult>;
   revokeAccess(telegramUserId: number): Promise<void>;
 }

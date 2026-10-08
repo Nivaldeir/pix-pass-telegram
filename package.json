@@ -7,19 +7,25 @@
     "dev": "tsx watch src/main.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/main.js",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "telegram:login": "tsx scripts/telegram-login.ts",
+    "telegram:login:qr": "tsx scripts/telegram-login-qr.ts"
   },
   "dependencies": {
+    "big-integer": "^1.6.52",
     "bullmq": "^5.34.5",
     "dotenv": "^16.4.7",
     "ioredis": "^5.4.2",
     "pg": "^8.23.0",
+    "qrcode-terminal": "^0.12.0",
     "telegraf": "^4.16.3",
+    "telegram": "^2.26.22",
     "zod": "^3.24.1"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
     "@types/pg": "^8.23.1",
+    "@types/qrcode-terminal": "^0.12.2",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2"
   },

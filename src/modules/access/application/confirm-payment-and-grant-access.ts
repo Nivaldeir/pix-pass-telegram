@@ -4,7 +4,10 @@ import type { GroupAccessService, GrantAccessResult } from "../domain/group-acce
 
 export type ConfirmPaymentAndGrantAccessResult = GrantAccessResult & {
   telegramChatId: number;
-  expiresAt: Date;
+  productType: "vip" | "game";
+  gameTitle?: string;
+  gameTelegramGroupId?: number;
+  expiresAt?: Date;
   alreadyConfirmed: boolean;
 };
 
@@ -25,6 +28,9 @@ export class ConfirmPaymentAndGrantAccess {
     if (payment.status === "confirmed") {
       return {
         telegramChatId: payment.telegramChatId,
+        productType: payment.productType,
+        gameTitle: payment.gameTitle,
+        gameTelegramGroupId: payment.gameTelegramGroupId,
         inviteLink: "",
         expiresAt: payment.confirmedAt ?? new Date(),
         alreadyConfirmed: true
@@ -36,15 +42,33 @@ export class ConfirmPaymentAndGrantAccess {
 
     await this.payments.save(payment);
 
+    const access = await this.groupAccess.grantAccess(
+      payment.telegramUserId,
+      payment.productType === "game" ? payment.gameTelegramGroupId : undefined
+    );
+
+    if (payment.productType === "game") {
+      return {
+        ...access,
+        telegramChatId: payment.telegramChatId,
+        productType: payment.productType,
+        gameTitle: payment.gameTitle,
+        gameTelegramGroupId: payment.gameTelegramGroupId,
+        alreadyConfirmed: false
+      };
+    }
+
     const subscription = await this.activateMonthlySubscription.execute({
       telegramUserId: payment.telegramUserId,
       paidAt: payment.confirmedAt
     });
-    const access = await this.groupAccess.grantAccess(payment.telegramUserId);
 
     return {
       ...access,
       telegramChatId: payment.telegramChatId,
+      productType: payment.productType,
+      gameTitle: payment.gameTitle,
+      gameTelegramGroupId: payment.gameTelegramGroupId,
       expiresAt: subscription.expiresAt,
       alreadyConfirmed: false
     };

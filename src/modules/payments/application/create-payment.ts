@@ -7,6 +7,10 @@ type Input = {
   telegramUserId: number;
   telegramChatId: number;
   amountCents: number;
+  productType?: "vip" | "game";
+  gameId?: string;
+  gameTitle?: string;
+  gameTelegramGroupId?: number;
 };
 
 export class CreatePayment {
@@ -16,7 +20,9 @@ export class CreatePayment {
   ) {}
 
   async execute(input: Input): Promise<PaymentCheckout> {
-    const pendingPayment = await this.payments.findLatestPendingByTelegramUserId(input.telegramUserId);
+    const pendingPayment = input.gameId
+      ? await this.payments.findLatestPendingByTelegramUserIdAndGameId(input.telegramUserId, input.gameId)
+      : await this.payments.findLatestPendingByTelegramUserId(input.telegramUserId);
 
     if (pendingPayment) {
       if (pendingPayment.checkoutUrl) {
@@ -40,7 +46,11 @@ export class CreatePayment {
       telegramUserId: input.telegramUserId,
       telegramChatId: input.telegramChatId,
       status: "pending" as const,
+      productType: input.productType ?? "vip",
       amountCents: input.amountCents,
+      gameId: input.gameId,
+      gameTitle: input.gameTitle,
+      gameTelegramGroupId: input.gameTelegramGroupId,
       createdAt: new Date()
     };
 

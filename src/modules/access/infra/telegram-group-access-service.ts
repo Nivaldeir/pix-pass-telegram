@@ -8,9 +8,9 @@ export class TelegramGroupAccessService implements GroupAccessService {
     private readonly groupId: number
   ) {}
 
-  async grantAccess(_telegramUserId: number): Promise<GrantAccessResult> {
+  async grantAccess(_telegramUserId: number, telegramGroupId = this.groupId): Promise<GrantAccessResult> {
     const expiresAt = Math.floor(Date.now() / 1000) + 60 * 60;
-    const invite = await this.createInviteLink(expiresAt);
+    const invite = await this.createInviteLink(telegramGroupId, expiresAt);
 
     return { inviteLink: invite.invite_link };
   }
@@ -22,9 +22,9 @@ export class TelegramGroupAccessService implements GroupAccessService {
     });
   }
 
-  private async createInviteLink(expiresAt: number): Promise<{ invite_link: string }> {
+  private async createInviteLink(telegramGroupId: number, expiresAt: number): Promise<{ invite_link: string }> {
     try {
-      return await this.bot.telegram.createChatInviteLink(this.groupId, {
+      return await this.bot.telegram.createChatInviteLink(telegramGroupId, {
         member_limit: 1,
         expire_date: expiresAt,
         creates_join_request: false

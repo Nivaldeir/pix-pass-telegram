@@ -46,7 +46,7 @@ export class MonkeyPayPaymentGateway implements PaymentGateway {
       body: JSON.stringify({
         walletId: this.config.walletId,
         amount: payment.amountCents / 100,
-        description: "",
+        description: payment.gameTitle ?? "",
         info: {
           payerDocument: this.config.payerDocument ?? null,
           payerName: this.config.payerName ?? `Telegram ${payment.telegramUserId}`,

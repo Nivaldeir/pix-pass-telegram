@@ -14,7 +14,15 @@ export class InMemoryPaymentRepository implements PaymentRepository {
 
   async findLatestPendingByTelegramUserId(telegramUserId: number): Promise<Payment | null> {
     const payments = [...this.payments.values()]
-      .filter((payment) => payment.telegramUserId === telegramUserId && payment.status === "pending")
+      .filter((payment) => payment.telegramUserId === telegramUserId && payment.productType === "vip" && payment.status === "pending")
+      .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime());
+
+    return payments[0] ?? null;
+  }
+
+  async findLatestPendingByTelegramUserIdAndGameId(telegramUserId: number, gameId: string): Promise<Payment | null> {
+    const payments = [...this.payments.values()]
+      .filter((payment) => payment.telegramUserId === telegramUserId && payment.gameId === gameId && payment.status === "pending")
       .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime());
 
     return payments[0] ?? null;
