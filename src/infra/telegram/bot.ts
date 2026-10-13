@@ -1,10 +1,11 @@
+import QRCode from "qrcode";
 import { Markup, Telegraf } from "telegraf";
 import { env } from "../../shared/config/env.js";
 import type { ListGames } from "../../modules/games/application/list-games.js";
 import type { Game } from "../../modules/games/domain/game.js";
 import type { CreatePayment } from "../../modules/payments/application/create-payment.js";
 import type { GetSubscriptionStatus } from "../../modules/subscriptions/application/get-subscription-status.js";
-import { replyReplacingPrevious, trackIncomingMessage } from "./chat-message-cleanup.js";
+import { replyPhotoReplacingPrevious, replyReplacingPrevious, trackIncomingMessage } from "./chat-message-cleanup.js";
 import type { Context } from "telegraf";
 
 type Dependencies = {
@@ -284,16 +285,14 @@ async function sendCheckout(ctx: Context, dependencies: Dependencies, options: C
   });
   const canUseUrlButton = isPublicHttpUrl(checkout.checkoutUrl);
   const paymentInstructions = checkout.qrCode
-    ? ["Use o Pix copia e cola abaixo:", "", `<code>${escapeHtml(checkout.qrCode)}</code>`]
+    ? ["Escaneie o QR Code acima ou toque em <b>Copiar Pix</b>."]
     : [
       canUseUrlButton
         ? "Toque no botao abaixo para abrir o pagamento simulado."
         : `Link simulado: ${checkout.checkoutUrl}`
     ];
 
-  await replyReplacingPrevious(
-    ctx,
-    [
+  const caption = [
       "<b>Pagamento gerado com sucesso.</b>",
       "",
       ...(game
@@ -306,12 +305,33 @@ async function sendCheckout(ctx: Context, dependencies: Dependencies, options: C
       options.productType === "vip"
         ? "Depois da confirmacao, eu libero seu acesso VIP por 30 dias automaticamente."
         : "Depois da confirmacao, eu envio o link de acesso para assistir este jogo."
-    ].join("\n"),
-    {
-      parse_mode: "HTML",
-      ...getCheckoutMenu(checkout)
+    ].join("\n");
+  const replyOptions = {
+    parse_mode: "HTML" as const,
+    ...getCheckoutMenu(checkout)
+  };
+
+  if (checkout.qrCode) {
+    try {
+      const qrImage = await QRCode.toBuffer(checkout.qrCode, { type: "png", width: 256, margin: 1 });
+
+      await replyPhotoReplacingPrevious(ctx, qrImage, { caption, ...replyOptions });
+      return;
+    } catch (error) {
+      console.error("Falha ao enviar imagem do QR Code, enviando apenas texto:", error);
     }
-  );
+  }
+
+  const textFallback = checkout.qrCode
+    ? caption.replace(
+      paymentInstructions[0] ?? "",
+      `Use o Pix copia e cola abaixo:
+
+<code>${escapeHtml(checkout.qrCode)}</code>`
+    )
+    : caption;
+
+  await replyReplacingPrevious(ctx, textFallback, replyOptions);
 }
 
 async function sendSubscriptionStatus(ctx: Context, dependencies: Dependencies): Promise<void> {

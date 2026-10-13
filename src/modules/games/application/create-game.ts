@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { env } from "../../../shared/config/env.js";
+import { ApplicationError } from "../../../shared/errors/application-error.js";
 import type { Game } from "../domain/game.js";
 import type { GameChannelProvisioner } from "../domain/game-channel-provisioner.js";
 import type { GameRepository } from "../domain/game-repository.js";
@@ -29,6 +30,16 @@ export class CreateGame {
 
     if (!title) {
       throw new Error("Informe o nome do jogo.");
+    }
+
+    if (input.deleteAt) {
+      if (input.deleteAt.getTime() <= Date.now()) {
+        throw new ApplicationError("A data de exclusao do jogo deve ser no futuro.");
+      }
+
+      if (input.startsAt && input.deleteAt.getTime() <= input.startsAt.getTime()) {
+        throw new ApplicationError("A data de exclusao deve ser depois da data do jogo.");
+      }
     }
 
     let telegramGroupId = input.telegramGroupId;

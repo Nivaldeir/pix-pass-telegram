@@ -30,6 +30,22 @@ export async function replyReplacingPrevious(ctx: Context, text: string, options
   scheduleInactivityCleanup(ctx.telegram, ctx.chat.id);
 }
 
+export async function replyPhotoReplacingPrevious(
+  ctx: Context,
+  photo: Buffer,
+  options?: Parameters<Context["replyWithPhoto"]>[1]
+): Promise<void> {
+  if (!ctx.chat) {
+    await ctx.replyWithPhoto({ source: photo }, options);
+    return;
+  }
+
+  await deletePreviousBotMessage(ctx.telegram, ctx.chat.id);
+  const message = await ctx.replyWithPhoto({ source: photo }, options);
+  rememberBotMessage(ctx.chat.id, message.message_id);
+  scheduleInactivityCleanup(ctx.telegram, ctx.chat.id);
+}
+
 export async function sendMessageReplacingPrevious(
   bot: Telegraf,
   chatId: number,
