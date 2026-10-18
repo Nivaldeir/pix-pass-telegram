@@ -313,7 +313,7 @@ async function sendCheckout(ctx: Context, dependencies: Dependencies, options: C
 
   if (checkout.qrCode) {
     try {
-      const qrImage = await QRCode.toBuffer(checkout.qrCode, { type: "png", width: 256, margin: 1 });
+      const qrImage = await QRCode.toBuffer(checkout.qrCode, { type: "png", scale: 5, margin: 4, errorCorrectionLevel: "M" });
 
       await replyPhotoReplacingPrevious(ctx, qrImage, { caption, ...replyOptions });
       return;
